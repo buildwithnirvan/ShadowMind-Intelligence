@@ -1,92 +1,134 @@
-# ShadowMind: Local-First AI Assistant & Mental-Wellness Companion
+# ShadowMind Intelligence 🧠
 
-ShadowMind is a fast, intelligent, local-first AI assistant built with React/TypeScript + FastAPI + MongoDB.
-It runs completely offline using **Ollama** and a structured **Offline Emotional Engine**—with zero Gemini API dependencies.
+### An AI-Driven Human Intelligence System
 
-## Architecture
+ShadowMind Intelligence is an AI-powered application designed to support emotional awareness, mental well-being, self-reflection, and personalized guidance through an interactive digital experience.
 
-| Layer | Component | Details |
-|---|---|---|
-| **Model A (General)** | `llama3.2:latest` | Everyday conversation, explanations, emotional assistance, summaries. |
-| **Model B (Coding)** | `qwen2.5-coder:3b` | Code generation, debugging, error root cause analysis, stack traces. |
-| **Model Router** | Deterministic Classifier | Zero-overhead regex/keyword router that routes without calling an auxiliary LLM. |
-| **Diagnostics** | Severity & Root Cause Engine | Classifies issues into `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFORMATIONAL`. |
-| **Offline Composer** | In-Memory Emotional Engine | 7,149 verified unique keyword/phrase dataset across 50 categories with negation & crisis safety. |
-| **Backend** | FastAPI + Motor (MongoDB) | Progressive SSE streaming, keep-alive persistence, non-blocking fallback. |
-| **Frontend** | React 18, TypeScript, Vite | Instant streaming rendering, markdown highlighting, dark/glass UI. |
+The platform combines AI-assisted conversations, mood tracking, journaling, meditation, and analytics to help users better understand their emotional patterns and well-being.
 
-## 1. Local AI Runtime (Ollama)
+---
 
-Install [Ollama](https://ollama.com) and pull the two primary local models:
+## 🚀 Features
 
-```bash
-# Model A: Fast General Assistant
-ollama pull llama3.2:latest
+### 🤖 AI-Powered Assistant
+- Interactive AI conversations.
+- AI-generated responses and personalized guidance.
+- AI provider integration with configurable backend settings.
+- Support for locally hosted language models where configured.
 
-# Model B: Technical & Coding Assistant (3B fits CPU & 16GB RAM)
-ollama pull qwen2.5-coder:3b
-```
+### 🧠 Emotional Intelligence
+- Emotion and sentiment analysis.
+- Emotional pattern identification.
+- AI-assisted insights for self-reflection.
+- Well-being indicators and analytical summaries.
 
-Ollama runs locally at `http://127.0.0.1:11434`. Models are kept persistent in memory via `OLLAMA_KEEP_ALIVE=30m` to eliminate reload latency.
+### 💬 CBT Coach
+- Interactive cognitive behavioral therapy-inspired exercises.
+- Guided reflection and exploration of thought patterns.
+- AI-assisted coping strategies and suggestions.
 
-## 2. Database (MongoDB)
+*ShadowMind is a self-help application, not a substitute for professional mental health care.*
 
-Run MongoDB locally or via Docker:
+### 🧘 Meditation and Relaxation
+- Guided meditation sessions.
+- Breathing exercises.
+- Relaxation-focused activities.
 
-```bash
-docker run -d -p 27017:27017 --name shadowmind-mongo mongo:7
-```
+### 📔 Digital Journal
+- Personal journaling.
+- AI-assisted journal summaries.
+- Reflection on thoughts, feelings, and experiences.
 
-## 3. Backend Setup
+### 😊 Mood Tracking
+- Record and review moods.
+- Explore emotional trends over time.
+- Access mood-related insights.
 
-```bash
-cd backend
-python -m venv venv
-venv\Scripts\activate      # Windows (or source venv/bin/activate on Linux/macOS)
-pip install -r requirements.txt
-cp .env.example .env
-```
+### 📊 Analytics Dashboard
+- Visual summaries of available application data.
+- Mood and emotional trend analysis.
+- Well-being indicators and AI-generated insights.
 
-Start the FastAPI server:
+### 🔐 User Management
+- User registration and authentication.
+- Protected application routes.
+- User-specific application features.
 
-```bash
-uvicorn main:app --reload --port 8000
-```
+### 🖥️ Desktop Application
+- Electron integration for a desktop experience.
+- React-based user interface.
+- Backend API communication.
 
-Run the automated test suite (all 91 tests run fully offline without external network):
+---
 
-```bash
-python -m pytest -v
-```
+## 🛠️ Technology Stack
 
-## 3. Frontend
+### Frontend
+- React
+- TypeScript
+- Vite
+- Electron
+- CSS
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+### Backend
+- Python
+- FastAPI
+- REST APIs
+- Pydantic
 
-Visit `http://localhost:5173`. The dev server proxies `/api` to the backend on
-port 8000 (see `vite.config.ts`).
+### Artificial Intelligence
+- AI provider integrations
+- Natural language processing
+- Sentiment and emotion analysis
+- Configurable language model support
+- Ollama integration where configured
 
-## Docker Compose
+### Development and Deployment
+- Git and GitHub
+- Docker
+- Docker Compose
+- Nginx
+- Node.js
+- Python virtual environments
 
-`docker-compose.yml` runs MongoDB, the backend and the frontend together:
+*The technologies and integrations used at runtime depend on the project configuration.*
 
-```bash
-docker compose up --build
-```
+---
 
-## Safety
+## 🏗️ Project Structure
 
-- Crisis language is detected locally (in `ai/analyzer.py`) before anything is
-  sent to any AI provider.
-- Any reply to acute risk always includes Tele-MANAS (14416, India, free, 24/7)
-  and emergency numbers - this is enforced in code (`ai/guard.py`), not left to
-  the model.
-- A model reply that uses cheerful language in response to distress (the
-  "happy to hear you're depressed" bug) is automatically rejected and retried,
-  then replaced by the offline composer if it still doesn't pass.
-
-This app offers supportive listening and tools, not therapy or diagnosis.
+```text
+ShadowMind-Intelligence/
+│
+├── backend/
+│   ├── ai/
+│   ├── routers/
+│   ├── schemas/
+│   ├── utils/
+│   ├── tests/
+│   ├── main.py
+│   ├── config.py
+│   ├── database.py
+│   ├── requirements.txt
+│   ├── Dockerfile
+│   └── .env.example
+│
+├── frontend/
+│   ├── electron/
+│   ├── public/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── context/
+│   │   ├── hooks/
+│   │   ├── pages/
+│   │   └── services/
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── Dockerfile
+│   └── .env.example
+│
+├── docker-compose.yml
+├── Makefile
+├── start.sh
+├── README.md
+└── .gitignore
