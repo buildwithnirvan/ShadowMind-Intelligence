@@ -1,0 +1,67 @@
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+*.so
+.venv/
+venv/
+env/
+ENV/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.log
+
+# ── Node ─────────────────────────────────────────────────────────────────────
+node_modules/
+dist/
+dist-ssr/
+*.local
+.npm
+
+# ── Env / Secrets ─────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── DB ───────────────────────────────────────────────────────────────────────
+*.sqlite
+*.db
+
+# ── Alembic ──────────────────────────────────────────────────────────────────
+alembic/versions/*.pyc
+
+# Local AI and IDE configuration
+.antigravity/
+.antigravity-ide/
+.claude/
+.cagent/
+.cache/
+
+# Sensitive credentials
+*.pem
+*.key
+secrets.json
+credentials.json
+
+# Local generated data (verify before excluding)
+uploads/
+user_data/s
