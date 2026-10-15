@@ -67,10 +67,11 @@ def _offline_compose(history, mode, analysis, recent_assistant, context, last_us
 def generate_chat_reply(
     messages: List[Dict[str, str]],
     session_type: str = "general",
-    max_tokens: int = 1024,
+    max_tokens: Optional[int] = None,
     wellness_context: Optional[Dict] = None,
 ) -> ChatReply:
     t0_start = time.time()
+    effective_max_tokens = max_tokens or getattr(providers.settings, "OLLAMA_NUM_PREDICT", 2048)
     # Bound history to recent 6 turns for optimal token processing efficiency and lower latency
     history = [
         m for m in messages[-6:]
@@ -112,7 +113,7 @@ def generate_chat_reply(
         provider_name, model_name = "offline", None
     else:
         t_prov_start = time.time()
-        result = providers.generate(base_prompt, history, max_tokens=max_tokens, model_override=route_decision.target_model)
+        result = providers.generate(base_prompt, history, max_tokens=effective_max_tokens, model_override=route_decision.target_model)
         provider_req_ms = int((time.time() - t_prov_start) * 1000)
 
         if result:
@@ -128,7 +129,7 @@ def generate_chat_reply(
                     + "Rewrite your reply completely following all guidelines."
                 )
                 t_retry_start = time.time()
-                retry_result = providers.generate(corrective_prompt, history, max_tokens=max_tokens, model_override=route_decision.target_model)
+                retry_result = providers.generate(corrective_prompt, history, max_tokens=effective_max_tokens, model_override=route_decision.target_model)
                 provider_req_ms += int((time.time() - t_retry_start) * 1000)
                 if retry_result:
                     retry_candidate = guard.clean(retry_result.text)
@@ -160,7 +161,7 @@ def generate_chat_reply(
 async def generate_chat_reply_stream_async(
     messages: List[Dict[str, str]],
     session_type: str = "general",
-    max_tokens: int = 1024,
+    max_tokens: Optional[int] = None,
     wellness_context: Optional[Dict] = None,
 ):
     """
@@ -170,6 +171,7 @@ async def generate_chat_reply_stream_async(
       {"type": "done", "text": "...", "meta": {...}}
     """
     t0_start = time.time()
+    effective_max_tokens = max_tokens or getattr(providers.settings, "OLLAMA_NUM_PREDICT", 2048)
     # Bound history to recent 6 turns for optimal token processing efficiency and lower latency
     history = [
         m for m in messages[-6:]
@@ -221,7 +223,7 @@ async def generate_chat_reply_stream_async(
     else:
         try:
             async for chunk, prov, mdl in providers.generate_stream_async(
-                base_prompt, history, max_tokens=max_tokens, model_override=route_decision.target_model
+                base_prompt, history, max_tokens=effective_max_tokens, model_override=route_decision.target_model
             ):
                 full_text += chunk
                 provider_used = prov

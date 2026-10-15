@@ -207,6 +207,8 @@ export default function Layout() {
               display: 'flex',
               flexDirection: 'column',
               flex: 1,
+              minHeight: 0,
+              height: isChat ? '100%' : undefined,
             }}
           >
             <Outlet />

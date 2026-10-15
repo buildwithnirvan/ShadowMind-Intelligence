@@ -133,10 +133,18 @@ export const chatApi = {
 
       if (!reader) throw new Error('No readable stream available');
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      let isStreaming = true;
+      let doneReceived = false;
+      let hasReceivedData = false;
 
+      while (isStreaming) {
+        const { done, value } = await reader.read();
+        if (done) {
+          isStreaming = false;
+          break;
+        }
+
+        hasReceivedData = true;
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n\n');
         buffer = lines.pop() || '';
@@ -152,11 +160,44 @@ export const chatApi = {
                 callbacks.onDelta?.(event.text);
               } else if (event.type === 'done') {
                 callbacks.onDone?.(event);
+                doneReceived = true;
               }
             } catch (e) {
               console.warn('Failed to parse SSE event:', e);
             }
           }
+        }
+      }
+
+      // Flush decoder buffer
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        const lines = buffer.split('\n\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const event = JSON.parse(trimmed.slice(6));
+              if (event.type === 'start') {
+                callbacks.onStart?.(event.meta, event.session_id, event.user_message_id);
+              } else if (event.type === 'delta') {
+                callbacks.onDelta?.(event.text);
+              } else if (event.type === 'done') {
+                callbacks.onDone?.(event);
+                doneReceived = true;
+              }
+            } catch (e) {
+              console.warn('Failed to parse final SSE event:', e);
+            }
+          }
+        }
+      }
+
+      if (!doneReceived && !callbacks.signal?.aborted) {
+        if (hasReceivedData) {
+          callbacks.onDone?.({ type: 'done', text: '' });
+        } else {
+          callbacks.onError?.(new Error('Connection closed before response received'));
         }
       }
     } catch (err: any) {
@@ -170,10 +211,55 @@ export const chatApi = {
     api.post(`/chat/sessions/${id}/analyze`),
 };
 
+export interface NearbyPlaceItem {
+  id: string;
+  name: string;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  distance_km?: number | null;
+  phone?: string | null;
+  website?: string | null;
+  rating?: number | null;
+  user_rating_count?: number | null;
+  open_now?: boolean | null;
+  google_maps_uri?: string | null;
+  directions_uri?: string | null;
+  osm_url?: string | null;
+  primary_type?: string | null;
+  verified_provider?: boolean;
+}
+
+export interface NearbySearchResponse {
+  results: NearbyPlaceItem[];
+  count: number;
+  category: string;
+  category_label: string;
+  radius_meters: number;
+  search_center?: { latitude: number; longitude: number } | null;
+  query_used?: string | null;
+  source: string;
+  attribution: string;
+  disclaimer: string;
+}
+
+export interface NearbySearchParams {
+  latitude?: number | null;
+  longitude?: number | null;
+  radius?: number;
+  category: string;
+  query?: string | null;
+  refresh?: boolean;
+}
+
 export const doctorsApi = {
   getRecommendations: () => api.get('/doctors/'),
   get: () => api.get('/doctors/'),
+  getCategories: () => api.get<{ categories: { id: string; label: string; crisis_relevant: boolean }[] }>('/doctors/categories'),
+  findNearby: (data: NearbySearchParams, signal?: AbortSignal) =>
+    api.post<NearbySearchResponse>('/doctors/nearby', data, { signal }),
 };
+
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
 export const analyticsApi = {

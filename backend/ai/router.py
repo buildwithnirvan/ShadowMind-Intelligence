@@ -21,6 +21,21 @@ _model_cache: Dict[str, object] = {"models": set(), "checked_at": 0.0}
 
 # ── Pattern Definitions for the Three Agents ─────────────────────────────────
 
+# Code, Debugging & Syntax Triggers
+CODER_PATTERNS = [
+    re.compile(r"\b(def\s+\w+|class\s+\w+|import\s+\w+|from\s+\w+\s+import|function\s+\w+|const\s+\w+|let\s+\w+|var\s+\w+)\b"),
+    re.compile(r"\b(syntaxerror|nullpointerexception|typeerror|attributeerror|indexerror|keyerror|importerror|referenceerror|segmentation\s*fault|segfault|stack\s*trace)\b", re.I),
+    re.compile(r"\b(debug(?:ging)?|exception|compiler|stack trace|runtime error|npm\s+run|git\s+commit|dockerfile|pip\s+install)\b", re.I),
+    re.compile(r"(?:#include|<\?php|public\s+static\s+void|console\.log|print\(|SELECT\s+.*\s+FROM)", re.I),
+]
+
+# Educational / Learning / Technical Roadmap Triggers
+EDUCATIONAL_PATTERNS = [
+    re.compile(r"\b(roadmap|curriculum|study plan|syllabus|learning path)\b", re.I),
+    re.compile(r"\b(full[ -]?stack|frontend|backend|web dev|software engineer\w*|programming|coding|developer|code|python|javascript|typescript|react|html|css|sql|database|api|algorithms?)\b", re.I),
+    re.compile(r"\b(how to learn|how does .* work|explain|tutorial|guide on|teach me|introduction to|course)\b", re.I),
+]
+
 # Agent 3: Solution-Focused Triggers
 # Practical action requests, strategy questions, "how to fix/solve/do"
 SOLUTION_PATTERNS = [
@@ -65,11 +80,12 @@ SIMPLE_OFFLINE_PATTERNS = [
 
 @dataclass
 class RouteDecision:
-    role: str               # "cbt" | "support" | "solution" | "offline"
+    role: str               # "cbt" | "support" | "solution" | "coder" | "general" | "offline"
     agent_name: str         # Human-readable agent title
     target_model: str       # Configured Ollama model name
     confidence: float
     reason: str
+    is_technical: bool = False
     is_offline_only: bool = False
 
 
@@ -123,7 +139,8 @@ def route_request(
             target_model="offline",
             confidence=1.0,
             reason="Ollama runtime is offline; routing to Offline Emotional Engine.",
-            is_offline_only=True
+            is_offline_only=True,
+            is_technical=False
         )
 
     cleaned = text.strip()
@@ -136,7 +153,8 @@ def route_request(
             target_model="offline",
             confidence=0.99,
             reason="Simple conversational greeting or courtesy routed to instant offline engine.",
-            is_offline_only=True
+            is_offline_only=True,
+            is_technical=False
         )
 
     base_url = getattr(settings, "OLLAMA_BASE_URL", "http://127.0.0.1:11434")
@@ -145,8 +163,21 @@ def route_request(
     cbt_model_cfg = getattr(settings, "OLLAMA_CBT_MODEL", "shadowmind-cbt:latest")
     support_model_cfg = getattr(settings, "OLLAMA_SUPPORT_MODEL", "shadowmind-support:latest")
     solution_model_cfg = getattr(settings, "OLLAMA_SOLUTION_MODEL", "shadowmind-solution:latest")
+    general_model_cfg = getattr(settings, "OLLAMA_GENERAL_MODEL", "llama3.2:latest")
+    coder_model_cfg = getattr(settings, "OLLAMA_CODER_MODEL", "qwen2.5-coder:3b")
 
     # 1. Explicit Session Type Overrides
+    if session_type == "coder":
+        target = _resolve_agent_model(coder_model_cfg, available_models)
+        return RouteDecision(
+            role="coder",
+            agent_name="Technical & Coding Specialist",
+            target_model=target,
+            confidence=0.98,
+            reason="Explicit coder session mode requested.",
+            is_technical=True
+        )
+
     if session_type == "cbt":
         target = _resolve_agent_model(cbt_model_cfg, available_models)
         return RouteDecision(
@@ -154,7 +185,8 @@ def route_request(
             agent_name="Mental Wellness and CBT Agent",
             target_model=target,
             confidence=0.98,
-            reason="Explicit CBT session mode requested."
+            reason="Explicit CBT session mode requested.",
+            is_technical=False
         )
 
     if session_type in {"mindfulness", "support"}:
@@ -164,7 +196,8 @@ def route_request(
             agent_name="Emotional Support Agent",
             target_model=target,
             confidence=0.98,
-            reason="Explicit mindfulness/support session mode requested."
+            reason="Explicit mindfulness/support session mode requested.",
+            is_technical=False
         )
 
     if session_type == "solution":
@@ -174,19 +207,21 @@ def route_request(
             agent_name="Solution-Focused Mental Wellness Agent",
             target_model=target,
             confidence=0.98,
-            reason="Explicit solution-focused session mode requested."
+            reason="Explicit solution-focused session mode requested.",
+            is_technical=False
         )
 
-    # 2. Priority Routing: Solution-Focused (Action / "How do I fix/solve" questions)
-    is_solution = any(p.search(cleaned) for p in SOLUTION_PATTERNS)
-    if is_solution:
-        target = _resolve_agent_model(solution_model_cfg, available_models)
+    # 2. Priority Routing: Code / Programming / Debugging Syntax
+    is_coder = any(p.search(cleaned) for p in CODER_PATTERNS)
+    if is_coder:
+        target = _resolve_agent_model(coder_model_cfg, available_models)
         return RouteDecision(
-            role="solution",
-            agent_name="Solution-Focused Mental Wellness Agent",
+            role="coder",
+            agent_name="Technical & Coding Specialist",
             target_model=target,
-            confidence=0.95,
-            reason="Action-oriented request seeking concrete strategies, solutions, or steps."
+            confidence=0.97,
+            reason="Code syntax, technical error, or debugging request routed to Coding Specialist.",
+            is_technical=True
         )
 
     # 3. CBT & Cognitive Distortions Triggers
@@ -198,7 +233,8 @@ def route_request(
             agent_name="Mental Wellness and CBT Agent",
             target_model=target,
             confidence=0.93,
-            reason="User expressed negative thought patterns, cognitive distortions, or self-criticism."
+            reason="User expressed negative thought patterns, cognitive distortions, or self-criticism.",
+            is_technical=False
         )
 
     # 4. Emotional Support Triggers
@@ -210,26 +246,43 @@ def route_request(
             agent_name="Emotional Support Agent",
             target_model=target,
             confidence=0.92,
-            reason="User expressed emotional distress, loneliness, sadness, or requested grounding."
+            reason="User expressed emotional distress, loneliness, sadness, or requested grounding.",
+            is_technical=False
         )
 
-    # 5. Question mark heuristic: If user asks an advice question, route to Solution-Focused
-    if "?" in cleaned and len(cleaned.split()) >= 4:
+    # 5. Action-Oriented / Problem-Solving Triggers
+    is_solution = any(p.search(cleaned) for p in SOLUTION_PATTERNS)
+    if is_solution:
         target = _resolve_agent_model(solution_model_cfg, available_models)
         return RouteDecision(
             role="solution",
             agent_name="Solution-Focused Mental Wellness Agent",
             target_model=target,
-            confidence=0.85,
-            reason="Direct question seeking guidance routed to Solution-Focused Agent."
+            confidence=0.95,
+            reason="Action-oriented request seeking concrete strategies, solutions, or steps.",
+            is_technical=False
         )
 
-    # 6. Default Fallback -> Emotional Support Agent
-    target = _resolve_agent_model(support_model_cfg, available_models)
+    # 6. Priority Routing: Educational, Roadmap & Technical Guidance
+    is_educational = any(p.search(cleaned) for p in EDUCATIONAL_PATTERNS)
+    if is_educational:
+        target = _resolve_agent_model(solution_model_cfg, available_models)
+        return RouteDecision(
+            role="solution",
+            agent_name="Solution & Learning Guide",
+            target_model=target,
+            confidence=0.96,
+            reason="Educational, learning, or technical guidance request routed to Solution & Learning Guide.",
+            is_technical=False
+        )
+
+    # 7. General Questions and Conversations
+    target = _resolve_agent_model(general_model_cfg, available_models)
     return RouteDecision(
-        role="support",
-        agent_name="Emotional Support Agent",
+        role="general",
+        agent_name="General AI Companion",
         target_model=target,
-        confidence=0.80,
-        reason="General mental wellness conversation routed to Emotional Support Agent."
+        confidence=0.85,
+        reason="General conversation or inquiry routed to General AI Companion.",
+        is_technical=False
     )

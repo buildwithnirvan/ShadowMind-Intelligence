@@ -227,7 +227,7 @@ def _cbt_reply(user_turns: int, a: TextAnalysis, seed: int, recent: List[str]) -
         f"\n**2. Possible Trigger Points:**\n"
         f"The primary trigger appears to be the gap between what you expected and what occurred, compounded by the automatic thought that immediately followed.",
         f"\n**3. Thinking Pattern to Examine:**\n"
-        f"Notice whether **{trap}** might be amplifying the distress here. You don't have to force yourself to change your feelings, but testing whether that thought is 100% fact can create breathing room.",
+        f"Notice whether **{trap}** might be amplifying the distress here. You don't have to force yourself to change your feelings, but testing whether that thought is 0 to 100% true (or somewhere in between) can create breathing room.",
         f"\n**4. Alternative Perspective:**\n"
         f"Consider this balanced possibility: *\"{alt_thought}\"*",
         f"\n**5. Practical Solutions:**\n"

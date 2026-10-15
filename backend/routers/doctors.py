@@ -52,3 +52,38 @@ async def get_recommendations(current_user: UserSession = Depends(get_current_us
         recs.append({**s,"why":s["why_template"].format(avg=round(avg,1),dominant=dominant[0] if dominant else "wellness"),"match_strength":"Suggested"})
     return {"recommendations":recs,"avg_mood":round(avg,2),"based_on":len(moods),
             "disclaimer":"ShadowMind recommends medical specialties, not individual doctors. Always consult a qualified healthcare professional."}
+
+
+from services.places_service import (
+    CATEGORY_DEFINITIONS,
+    NearbySearchRequest,
+    NearbySearchResponse,
+    execute_nearby_search,
+)
+
+
+@router.get("/categories")
+async def get_categories():
+    """Return supported directory search categories."""
+    return {
+        "categories": [
+            {
+                "id": k,
+                "label": v["label"],
+                "crisis_relevant": v["crisis_relevant"],
+            }
+            for k, v in CATEGORY_DEFINITIONS.items()
+        ]
+    }
+
+
+@router.post("/nearby", response_model=NearbySearchResponse)
+async def find_nearby_doctors(
+    payload: NearbySearchRequest,
+    current_user: UserSession = Depends(get_current_user),
+):
+    """
+    Search for nearby clinical facilities and practitioners using OpenStreetMap data (Overpass API & Nominatim).
+    No API key required. Accepts latitude, longitude, search radius, validated category, or manual query fallback.
+    """
+    return await execute_nearby_search(payload, client_id=str(current_user.id))
