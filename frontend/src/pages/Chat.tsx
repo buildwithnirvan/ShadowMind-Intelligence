@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Send, Plus, Trash2, Bot, User as UserIcon, Mic, MicOff, Save,
-  Sparkles, ShieldAlert, CheckCircle2, MessageSquare, X, Menu
+  Send, Plus, Trash2, User as UserIcon, Mic, MicOff, Save,
+  X, Menu
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { chatApi } from '../services/api';
@@ -11,6 +11,8 @@ import CrisisDialog from '../components/CrisisDialog';
 import { useSpeechToText } from '../hooks/useSpeechToText';
 import { useSentiment } from '../hooks/useSentiment';
 import { format } from 'date-fns';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const QUICK_PROMPTS = [
   "I've been feeling anxious and could use some grounding.",
@@ -35,6 +37,48 @@ export default function Chat() {
   const [sessLoading, setSessLoading] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
+  const shouldInstantScrollRef = useRef(false);
+  const touchStartYRef = useRef<number | null>(null);
+
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior,
+    });
+  };
+
+  const handleScroll = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    // Consider user near the bottom if within 60px
+    isNearBottomRef.current = distanceToBottom < 60;
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (e.deltaY < 0) {
+      // User is scrolling upwards with mouse wheel or trackpad
+      isNearBottomRef.current = false;
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    touchStartYRef.current = e.touches[0].clientY;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartYRef.current !== null) {
+      const deltaY = e.touches[0].clientY - touchStartYRef.current;
+      if (deltaY > 0) {
+        // Swiping down means scrolling UP to see earlier messages
+        isNearBottomRef.current = false;
+      }
+    }
+  };
 
   const { isListening, startListening, stopListening, error: sttError } =
     useSpeechToText({ onFinalResult: (t) => setInput((prev) => (prev + ' ' + t).trim()) });
@@ -49,10 +93,13 @@ export default function Chat() {
   }, []);
 
   useEffect(() => {
-    if (requestState === 'STREAMING') {
-      endRef.current?.scrollIntoView({ behavior: 'auto' });
-    } else {
-      endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isNearBottomRef.current) {
+      if (requestState === 'STREAMING' || shouldInstantScrollRef.current) {
+        scrollToBottom('auto');
+        shouldInstantScrollRef.current = false;
+      } else {
+        scrollToBottom('smooth');
+      }
     }
   }, [messages, requestState]);
 
@@ -78,6 +125,8 @@ export default function Chat() {
       setActive(r.data);
       setMessages(r.data.messages || []);
       setSessType(r.data.session_type || 'general');
+      isNearBottomRef.current = true;
+      shouldInstantScrollRef.current = true;
     } catch {
       toast.error('Failed to load session');
     }
@@ -89,6 +138,7 @@ export default function Chat() {
       setSessions((p) => [r.data, ...p]);
       setActive(r.data);
       setMessages([]);
+      isNearBottomRef.current = true;
       toast.success('New conversation started');
     } catch {
       toast.error('Failed to create session');
@@ -145,6 +195,7 @@ export default function Chat() {
     };
 
     setMessages((p) => [...p, userMsg, assistantPlaceholder]);
+    isNearBottomRef.current = true;
     setLoading(true);
     setRequestState('WAITING_FOR_FIRST_TOKEN');
     setActiveAssistantMsgId(assistantTmpId);
@@ -250,6 +301,7 @@ export default function Chat() {
       style={{
         display: 'flex',
         height: '100%',
+        minHeight: 0,
         flex: 1,
         padding: '1rem',
         overflow: 'hidden',
@@ -332,6 +384,7 @@ export default function Chat() {
         <div
           style={{
             flex: 1,
+            minHeight: 0,
             overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
@@ -432,11 +485,14 @@ export default function Chat() {
           overflow: 'hidden',
           position: 'relative',
           height: '100%',
+          minHeight: 0,
+          minWidth: 0,
         }}
       >
         {/* Chat Header */}
         <div
           style={{
+            flexShrink: 0,
             padding: '1.1rem 1.75rem',
             borderBottom: '1px solid var(--border-dim)',
             background: 'linear-gradient(180deg, rgba(56, 189, 248, 0.05) 0%, transparent 100%)',
@@ -528,7 +584,19 @@ export default function Chat() {
         </div>
 
         {isCrisis && (
-          <div style={{ padding: '0.85rem 1.75rem', borderBottom: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div
+            style={{
+              flexShrink: 0,
+              padding: '0.85rem 1.75rem',
+              borderBottom: '1px solid rgba(239,68,68,0.3)',
+              background: 'rgba(239,68,68,0.06)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+            }}
+          >
             <span style={{ fontSize: '0.82rem', color: '#fca5a5' }}>This is a safe space. If things feel urgent, immediate help is one tap away.</span>
             <button onClick={() => setShowCrisis(true)} className="btn btn-danger btn-sm">Get help now</button>
           </div>
@@ -536,9 +604,16 @@ export default function Chat() {
 
         {/* Messages Stream */}
         <div
+          ref={messagesContainerRef}
+          onScroll={handleScroll}
+          onWheel={handleWheel}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
           style={{
             flex: 1,
+            minHeight: 0,
             overflowY: 'auto',
+            overscrollBehaviorY: 'contain',
             padding: '1.75rem 2.25rem',
             display: 'flex',
             flexDirection: 'column',
@@ -675,31 +750,120 @@ export default function Chat() {
                 }}
               >
                 {msg.content ? (
-                  <p
-                    style={{
-                      fontFamily: 'var(--font-body)',
-                      fontSize: '1rem',
-                      color: 'var(--text-primary)',
-                      lineHeight: 1.65,
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                    }}
-                  >
-                    {msg.content}
-                    {msg.id === activeAssistantMsgId && requestState === 'STREAMING' && (
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          width: '3px',
-                          height: '0.95rem',
-                          background: '#f28c28',
-                          marginLeft: '4px',
-                          verticalAlign: 'text-bottom',
-                          animation: 'pulse 1s infinite',
+                  msg.role === 'user' ? (
+                    <p
+                      style={{
+                        fontFamily: 'var(--font-body)',
+                        fontSize: '1rem',
+                        color: 'var(--text-primary)',
+                        lineHeight: 1.65,
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        margin: 0,
+                      }}
+                    >
+                      {msg.content}
+                    </p>
+                  ) : (
+                    <div
+                      className="assistant-markdown-content"
+                      style={{
+                        fontFamily: 'var(--font-body)',
+                        fontSize: '0.98rem',
+                        color: 'var(--text-primary)',
+                        lineHeight: 1.68,
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          h1: ({ _node, ...props }: any) => (
+                            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '0.9rem', marginBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.25rem' }} {...props} />
+                          ),
+                          h2: ({ _node, ...props }: any) => (
+                            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.18rem', fontWeight: 700, color: '#f28c28', marginTop: '0.85rem', marginBottom: '0.45rem' }} {...props} />
+                          ),
+                          h3: ({ _node, ...props }: any) => (
+                            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem', fontWeight: 700, color: '#38bdf8', marginTop: '0.75rem', marginBottom: '0.35rem' }} {...props} />
+                          ),
+                          h4: ({ _node, ...props }: any) => (
+                            <h4 style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.6rem', marginBottom: '0.25rem' }} {...props} />
+                          ),
+                          p: ({ _node, ...props }: any) => (
+                            <p style={{ margin: '0.45rem 0', lineHeight: 1.68, color: 'var(--text-primary)' }} {...props} />
+                          ),
+                          strong: ({ _node, ...props }: any) => (
+                            <strong style={{ fontWeight: 700, color: '#ffffff' }} {...props} />
+                          ),
+                          em: ({ _node, ...props }: any) => (
+                            <em style={{ fontStyle: 'italic', color: 'rgba(255,255,255,0.92)' }} {...props} />
+                          ),
+                          ul: ({ _node, ...props }: any) => (
+                            <ul style={{ paddingLeft: '1.4rem', margin: '0.5rem 0', listStyleType: 'disc' }} {...props} />
+                          ),
+                          ol: ({ _node, ...props }: any) => (
+                            <ol style={{ paddingLeft: '1.4rem', margin: '0.5rem 0', listStyleType: 'decimal' }} {...props} />
+                          ),
+                          li: ({ _node, ...props }: any) => (
+                            <li style={{ margin: '0.25rem 0', lineHeight: 1.6 }} {...props} />
+                          ),
+                          blockquote: ({ _node, ...props }: any) => (
+                            <blockquote style={{ borderLeft: '3px solid #f28c28', padding: '0.5rem 0.85rem', margin: '0.65rem 0', color: 'var(--text-secondary)', background: 'rgba(242, 140, 40, 0.06)', borderRadius: '0 6px 6px 0' }} {...props} />
+                          ),
+                          pre: ({ _node, ...props }: any) => (
+                            <pre style={{ background: '#050a14', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: '8px', padding: '0.85rem 1rem', overflowX: 'auto', margin: '0.65rem 0' }} {...props} />
+                          ),
+                          code: ({ _node, className, children, ...props }: any) => {
+                            const isMultiline = String(children).includes('\n') || Boolean(className);
+                            if (isMultiline) {
+                              return (
+                                <code style={{ fontFamily: 'var(--font-mono)', fontSize: '0.86rem', color: '#e2e8f0', lineHeight: 1.5, background: 'none', padding: 0 }} {...props}>
+                                  {children}
+                                </code>
+                              );
+                            }
+                            return (
+                              <code style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '0.15rem 0.4rem', borderRadius: '4px', fontFamily: 'var(--font-mono)', fontSize: '0.88em', color: '#f28c28' }} {...props}>
+                                {children}
+                              </code>
+                            );
+                          },
+                          a: ({ _node, href, children, ...props }: any) => (
+                            <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: '#38bdf8', textDecoration: 'underline' }} {...props}>
+                              {children}
+                            </a>
+                          ),
+                          table: ({ _node, ...props }: any) => (
+                            <div style={{ overflowX: 'auto', margin: '0.75rem 0' }}>
+                              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.88rem' }} {...props} />
+                            </div>
+                          ),
+                          th: ({ _node, ...props }: any) => (
+                            <th style={{ border: '1px solid var(--border-dim)', padding: '0.5rem 0.75rem', background: 'rgba(255,255,255,0.04)', fontWeight: 600, color: 'var(--text-primary)' }} {...props} />
+                          ),
+                          td: ({ _node, ...props }: any) => (
+                            <td style={{ border: '1px solid var(--border-dim)', padding: '0.5rem 0.75rem', color: 'var(--text-secondary)' }} {...props} />
+                          ),
                         }}
-                      />
-                    )}
-                  </p>
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                      {msg.id === activeAssistantMsgId && requestState === 'STREAMING' && (
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            width: '3px',
+                            height: '0.95rem',
+                            background: '#f28c28',
+                            marginLeft: '4px',
+                            verticalAlign: 'text-bottom',
+                            animation: 'pulse 1s infinite',
+                          }}
+                        />
+                      )}
+                    </div>
+                  )
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '2px 0' }}>
                     <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
@@ -743,6 +907,7 @@ export default function Chat() {
         {/* Input Bar */}
         <div
           style={{
+            flexShrink: 0,
             padding: '1.25rem 1.75rem',
             borderTop: '1px solid var(--border-dim)',
             background: 'linear-gradient(0deg, rgba(5,8,17,0.9) 0%, transparent 100%)',

@@ -13,10 +13,13 @@ class Settings(BaseSettings):
     OLLAMA_SUPPORT_MODEL: str = "shadowmind-support:latest"
     OLLAMA_SOLUTION_MODEL: str = "shadowmind-solution:latest"
     OLLAMA_GENERAL_MODEL: str = "llama3.2:latest"
-    OLLAMA_CODER_MODEL: str = "shadowmind-solution:latest"
+    OLLAMA_CODER_MODEL: str = "qwen2.5-coder:3b"
     OLLAMA_MODEL: str = "shadowmind-cbt:latest"
     OLLAMA_KEEP_ALIVE: str = "60m"
     OLLAMA_TIMEOUT: int = 60
+    OLLAMA_NUM_PREDICT: int = 2048
+    OLLAMA_NUM_CTX: int = 4096
+    MAX_RESPONSE_CHARS: int = 32000
     ANALYTICS_CACHE_TTL_SECONDS: int = 3600
     CORS_ORIGINS: str = '["http://localhost:5173","http://localhost:3000"]'
     # ── AI providers (Local-First Ollama Primary, Offline Fallback) ──
@@ -27,6 +30,26 @@ class Settings(BaseSettings):
     ANTHROPIC_MODEL: str = "claude-haiku-4-5-20251001"
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    # ── Nearby Healthcare Facilities (OpenStreetMap Overpass & Nominatim) ──
+    # No API key required. Uses public OpenStreetMap data.
+    OVERPASS_API_URL: str = "https://overpass-api.de/api/interpreter"
+    OVERPASS_FALLBACK_URLS: str = '["https://lz4.overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://overpass.private.coffee/api/interpreter"]'
+    NOMINATIM_API_URL: str = "https://nominatim.openstreetmap.org/search"
+    PLACES_RATE_LIMIT_PER_MINUTE: int = 30
+    PLACES_TIMEOUT_SECONDS: float = 12.0
+    PLACES_CACHE_TTL_SECONDS: int = 300
+    GOOGLE_MAPS_API_KEY: str = ""  # Deprecated / optional, no longer required
+
+    @property
+    def overpass_fallback_urls_list(self) -> List[str]:
+        try:
+            return json.loads(self.OVERPASS_FALLBACK_URLS)
+        except Exception:
+            return [
+                "https://lz4.overpass-api.de/api/interpreter",
+                "https://overpass.kumi.systems/api/interpreter",
+                "https://overpass.private.coffee/api/interpreter",
+            ]
 
     @property
     def cors_origins_list(self) -> List[str]:

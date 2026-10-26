@@ -34,8 +34,10 @@ def check_crisis(content: str) -> bool:
     return crisis_level(content) >= 2
 
 
+from typing import Dict, List, Optional
+
 # ── chat ─────────────────────────────────────────────────────────────────────
-def get_chat_reply(messages: List[Dict[str, str]], session_type: str = "general", max_tokens: int = 1024) -> ChatReply:
+def get_chat_reply(messages: List[Dict[str, str]], session_type: str = "general", max_tokens: Optional[int] = None) -> ChatReply:
     return generate_chat_reply(messages, session_type, max_tokens)
 
 

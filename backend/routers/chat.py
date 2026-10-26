@@ -168,7 +168,8 @@ async def send_message(
     ai_messages = [{"role": m["role"], "content": m["content"]} for m in history]
 
     t_llm_start = time.time()
-    reply = await asyncio.to_thread(get_chat_reply, ai_messages, session_type, 1024)
+    num_predict = getattr(providers.settings, "OLLAMA_NUM_PREDICT", 2048)
+    reply = await asyncio.to_thread(get_chat_reply, ai_messages, session_type, num_predict)
     t_llm_end = time.time()
 
     emotion = reply.analysis.to_public()
@@ -273,7 +274,8 @@ async def send_message_stream(
         final_meta = {}
         final_text = ""
 
-        async for event in generate_chat_reply_stream_async(ai_messages, session_type, 1024, wellness_ctx):
+        num_predict = getattr(providers.settings, "OLLAMA_NUM_PREDICT", 2048)
+        async for event in generate_chat_reply_stream_async(ai_messages, session_type, num_predict, wellness_ctx):
             if event["type"] == "start":
                 yield f"data: {json.dumps({'type': 'start', 'session_id': session_id_str, 'user_message_id': user_msg_id, 'meta': event['meta']})}\n\n"
             elif event["type"] == "delta":

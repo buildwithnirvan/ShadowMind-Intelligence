@@ -19,13 +19,16 @@ _HELPLINE = re.compile(r"\b(14416|112|988|741741|9999 ?666 ?555|helpline|crisis 
 _MARKDOWN = re.compile(r"(^|\n)\s*(#{1,6}\s|[-*•]\s|\d+\.\s)")
 
 
-def clean(text: str, max_chars: int = 4000) -> str:
+from config import settings
+
+def clean(text: str, max_chars: Optional[int] = None) -> str:
+    limit = max_chars or getattr(settings, "MAX_RESPONSE_CHARS", 32000)
     t = (text or "").strip()
     t = re.sub(r"^\s*(shadow|assistant)\s*:\s*", "", t, flags=re.I)   # model echoing the role label
     t = t.strip('"').strip()
-    if len(t) > max_chars:
-        cut = t[:max_chars]
-        end = max(cut.rfind(". "), cut.rfind("? "), cut.rfind("! "))
+    if len(t) > limit:
+        cut = t[:limit]
+        end = max(cut.rfind(". "), cut.rfind("? "), cut.rfind("! "), cut.rfind("\n"))
         t = cut[: end + 1] if end > 200 else cut.rsplit(" ", 1)[0] + "…"
     return t
 
@@ -43,8 +46,6 @@ def validate(reply: str, analysis: TextAnalysis, mode: str) -> Tuple[bool, Optio
         return False, "Your reply was dismissive. Validate their feelings first."
     if analysis.crisis_level >= 2 and "?" not in reply:
         return False, "In a crisis you must gently ask whether they are safe / thinking of ending their life."
-    if len(reply) > 5000:
-        return False, "Your reply was far too long. Keep it focused and concise."
     return True, None
 
 

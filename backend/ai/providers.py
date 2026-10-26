@@ -63,7 +63,7 @@ def _cooling_down(name: str) -> bool:
 
 
 def _mark_failed(name: str, err: object, is_connection_error: bool = False) -> None:
-    if is_connection_error or isinstance(err, (httpx.ConnectError, httpx.ConnectTimeout)):
+    if is_connection_error or isinstance(err, (httpx.ConnectError, httpx.ConnectTimeout, httpx.TimeoutException)):
         _failed_at[name] = time.time()
         _failed_at[f"{name}_cooldown"] = _COOLDOWN_SECONDS
         logger.warning("AI provider '%s' unreachable or connection error: %s (cooldown active)", name, err)
@@ -196,14 +196,17 @@ def _call_ollama(
     model = _resolve_ollama_model(base, model_override)
     keep_alive = getattr(settings, "OLLAMA_KEEP_ALIVE", "30m")
 
+    predict_val = max(max_tokens or 0, getattr(settings, "OLLAMA_NUM_PREDICT", 2048))
+    ctx_val = getattr(settings, "OLLAMA_NUM_CTX", 4096)
+
     payload = {
         "model": model,
         "stream": False,
         "keep_alive": keep_alive,
         "messages": [{"role": "system", "content": system}, *_normalize(messages)],
         "options": {
-            "num_predict": min(max_tokens or 220, 250),
-            "num_ctx": 1024,
+            "num_predict": predict_val,
+            "num_ctx": ctx_val,
             "temperature": min(temperature, 0.7),
             "top_p": 0.9,
             "repeat_penalty": 1.1
@@ -219,9 +222,18 @@ def _call_ollama(
         r = client.post(f"{base}/api/chat", json=payload, timeout=httpx.Timeout(timeout, connect=2.5))
         if r.status_code != 200:
             raise RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
-        text = (r.json().get("message", {}).get("content") or "").strip()
+        res_json = r.json()
+        text = (res_json.get("message", {}).get("content") or "").strip()
+        done_reason = res_json.get("done_reason") or "stop"
+        if done_reason == "length" and text:
+            logger.info("Ollama response reached output limit (num_predict=%d)", predict_val)
+            if not text.endswith((".", "!", "?", "```", "\n", "*", "…")):
+                last_punct = max(text.rfind(".\n"), text.rfind(". "), text.rfind("? "), text.rfind("! "), text.rfind("\n#"), text.rfind("\n-"))
+                if last_punct > len(text) * 0.75:
+                    text = text[:last_punct + 1]
+            text = f"{text.rstrip()}\n\n*[Response reached output limit. Let me know if you would like me to continue with the next part!]*"
         elapsed = int((time.time() - t0) * 1000)
-        logger.info("[PERF] Ollama completed in %d ms (model=%s)", elapsed, model)
+        logger.info("[PERF] Ollama completed in %d ms (model=%s, done_reason=%s)", elapsed, model, done_reason)
         return ProviderResult(text, "ollama", model) if text else None
     except Exception as e:
         is_conn = isinstance(e, (httpx.ConnectError, httpx.ConnectTimeout))
@@ -311,8 +323,8 @@ async def generate_stream_async(
                 "keep_alive": keep_alive,
                 "messages": [{"role": "system", "content": system}, *_normalize(messages)],
                 "options": {
-                    "num_predict": min(max_tokens or 220, 250),
-                    "num_ctx": 1024,
+                    "num_predict": max(max_tokens or 0, getattr(settings, "OLLAMA_NUM_PREDICT", 2048)),
+                    "num_ctx": getattr(settings, "OLLAMA_NUM_CTX", 4096),
                     "temperature": min(temperature, 0.7)
                 },
             }
@@ -331,6 +343,7 @@ async def generate_stream_async(
                         if response.status_code != 200:
                             _mark_failed("ollama", f"HTTP {response.status_code}")
                             continue
+                        done_reason = "stop"
                         async for line in response.aiter_lines():
                             if line:
                                 try:
@@ -342,10 +355,15 @@ async def generate_stream_async(
                                             ttft = int((time.time() - t0) * 1000)
                                             logger.info("[PERF] Ollama first response: %d ms", ttft)
                                         yield delta, "ollama", model
+                                    if event.get("done"):
+                                        done_reason = event.get("done_reason") or "stop"
                                 except Exception:
                                     pass
+                        if done_reason == "length":
+                            logger.info("Ollama stream reached output limit")
+                            yield "\n\n*[Response reached output limit. Let me know if you would like me to continue with the next part!]*", "ollama", model
                         elapsed = int((time.time() - t0) * 1000)
-                        logger.info("[PERF] Ollama completed stream: %d ms", elapsed)
+                        logger.info("[PERF] Ollama completed stream: %d ms (done_reason=%s)", elapsed, done_reason)
                         return
             except Exception as e:
                 elapsed = int((time.time() - t0) * 1000)
